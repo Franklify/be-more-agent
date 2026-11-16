@@ -5,16 +5,16 @@
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue) ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-red) ![License](https://img.shields.io/badge/License-MIT-green)
 
-This project turns a Raspberry Pi into a fully functional, conversational AI agent. Unlike cloud-based assistants, this agent runs **100% locally** on your device. It listens for a wake word, processes speech, "thinks" using a local Large Language Model (LLM), and speaks back with a low-latency neural voice—all while displaying reactive face animations.
+This project turns a Raspberry Pi into a conversational, offline-first AI agent. Wake-word detection, speech, and language models run locally. Optional web searches send the search query to external search providers and require internet access. It listens for a wake word, processes speech, "thinks" using a local Large Language Model (LLM), and speaks back with a low-latency neural voice—all while displaying reactive face animations.
 
 **It is designed as a blank canvas:** You can easily swap the face images and sound effects to create your own character!
 
 ## ✨ Features
 
-* **100% Local Intelligence**: Powered by **Ollama** (LLM) and **Whisper.cpp** (Speech-to-Text). No API fees, no cloud data usage.
+* **Local Intelligence**: Powered by **Ollama** (LLM) and **Whisper.cpp** (Speech-to-Text). Web search is an optional online exception.
 * **Open Source Wake Word**: Wakes up to your custom model using **OpenWakeWord** (Offline & Free). No access keys required.
 * **Hardware-Aware Audio**: Automatically detects your microphone's sample rate and resamples audio on the fly to prevent ALSA errors.
-* **Smart Web Search**: Uses DuckDuckGo to find real-time news and information when the LLM doesn't know the answer.
+* **Web Search**: Finds recent information online, summarizes several snippets, and displays available sources and dates. Python 3.10+ uses the `ddgs` metasearch library; Python 3.9 uses its older `duckduckgo-search` predecessor.
 * **Reactive Faces**: The GUI updates the character's face based on its state (Listening, Thinking, Speaking, Idle).
 * **Fast Text-to-Speech**: Uses **Piper TTS** for low-latency, high-quality voice generation on the Pi.
 * **Vision Capable**: Can "see" and describe the world using a connected camera and the **Moondream** vision model.
@@ -33,6 +33,7 @@ This project turns a Raspberry Pi into a fully functional, conversational AI age
 ```text
 be-more-agent/
 ├── agent.py                   # The main brain script
+├── web_search.py              # Web search and result formatting
 ├── setup.sh                   # Auto-installer script
 ├── wakeword.onnx              # OpenWakeWord model (The "Ear")
 ├── config.json                # User settings (Models, Prompt, Hardware)
@@ -72,7 +73,7 @@ curl -fsSL https://ollama.com/install.sh| sh
 ```
 *Pull the required models:*
 ```bash
-ollama pull gemma:2b
+ollama pull gemma3:1b
 ollama pull moondream
 ```
 
@@ -101,7 +102,8 @@ python agent.py
 
 ## 📂 Configuration (`config.json`)
 
-You can modify the hardware behavior and personality in `config.json`. The `agent.py` script creates this on the first run if it doesn't exist, but you can create it manually:
+You can modify the hardware behavior and personality in `config.json`. If it
+doesn't exist, the agent uses its built-in defaults; create the file to override them:
 
 ```json
 {
@@ -110,9 +112,28 @@ You can modify the hardware behavior and personality in `config.json`. The `agen
     "voice_model": "piper/en_GB-semaine-medium.onnx",
     "chat_memory": true,
     "camera_rotation": 0,
-    "system_prompt_extras": "You are a helpful robot assistant. Keep responses short and cute."
+    "system_prompt_extras": "Be a cheerful, curious robot. Occasionally add a brief, original playful joke when appropriate, but put helpful answers first.",
+    "native_tools": false
 }
 ```
+
+Ask "tell me a joke" or "make me laugh" for a short built-in joke. The
+personality prompt also allows occasional playful responses; edit or clear
+`system_prompt_extras` to customize it.
+
+### Optional Qwen model experiment
+
+The default remains `gemma3:1b`. To try Qwen3's native tool calling, update
+Ollama and the Python dependencies, then run `ollama pull qwen3:1.7b` and set
+`"text_model": "qwen3:1.7b"` and `"native_tools": true` in `config.json`.
+Thinking is disabled for this mode, and its initial response is not streamed;
+only one tool call per response is supported. Set `native_tools` back to
+`false` when switching to a model without native tool support.
+
+Qwen is larger and may be slower or use more memory on a Pi. Compare it with
+the default using the same spoken questions, measuring time to first speech,
+total response time, memory use, and correct time, camera, and search actions.
+No Pi benchmark is included.
 
 ---
 
@@ -137,11 +158,13 @@ When you run the `setup.sh` script, it will automatically download the compiled 
 4. Ensure your `config.json` file points to the new model:
    ```json
    "voice_model": "voices/bmo.onnx"
+   ```
+
 ---
 
 ## ⚠️ Troubleshooting
 
-* **"No search library found":** If web search fails, ensure you are in the virtual environment and `duckduckgo-search` is installed via pip.
+* **Search import errors:** Activate the virtual environment and run `pip install --upgrade -r requirements.txt`. Search requires internet access; provider errors or rate limits can also cause failures.
 * **Shutdown Errors:** When you exit the script (Ctrl+C), you might see `Expression 'alsa_snd_pcm_mmap_begin' failed`. **This is normal.** It just means the audio stream was cut off mid-sample. It does not affect the functionality.
 * **Audio Glitches:** If the voice sounds fast or slow, the script attempts to auto-detect sample rates. Ensure your `config.json` points to a valid `.onnx` voice model in the `piper/` folder.
 If your custom BMO voice sounds incredibly deep, slow, or "demonic," don't panic! This is not an issue with the Piper installation or the setup script. It is almost always caused by a **Sample Rate (Hz)** mismatch between the model and the audio player.
